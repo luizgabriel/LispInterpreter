@@ -1,10 +1,10 @@
 use std::fmt;
 
 use colored::Colorize;
-use rustyline::Editor;
 use rustyline::error::ReadlineError;
+use rustyline::Editor;
 
-use flow_lang::{evaluation::*, parsing::*};
+use flow_lang::{evaluation::{*, scope::Scope}, parsing::*};
 
 use crate::display::{ColoredError, ColoredLispVal};
 
@@ -35,12 +35,11 @@ fn to_readline_error(e: ReadlineError) -> REPLError {
     }
 }
 
-pub fn read(rl: &mut Editor::<()>) -> Result<String, REPLError> {
+pub fn read(rl: &mut Editor<()>) -> Result<String, REPLError> {
     let prompt = format!("{} ", ">".bright_blue().bold());
 
     // Read a line of input from the user
-    let input = rl.readline(&prompt)
-        .map_err(to_readline_error)?;
+    let input = rl.readline(&prompt).map_err(to_readline_error)?;
 
     // Save the input to history
     rl.add_history_entry(input.as_str());
@@ -56,15 +55,13 @@ fn unwrap_expression(parse_result: (&str, LispVal)) -> Result<LispVal, REPLError
     }
 }
 
-pub fn evaluate(input: String) -> Result<ColoredLispVal, REPLError> {
-    // Parse the input
-    let expr = parse(&input)
+pub fn evaluate(scope: Scope, input: &str) -> Result<(Scope, ColoredLispVal), REPLError> {
+    let expr = parse(input)
         .map_err(|e| REPLError::ParseError(e.to_string()))
         .and_then(unwrap_expression)?;
 
-    // Evaluate the expression
-    eval(&expr)
-        .map(ColoredLispVal::new)
+    eval(scope, &expr)
+        .map(|(scope, val)| (scope, ColoredLispVal::new(val)))
         .map_err(ColoredError::new)
         .map_err(|e| REPLError::EvaluationError(e.to_string()))
 }

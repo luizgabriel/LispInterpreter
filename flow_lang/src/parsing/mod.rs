@@ -158,6 +158,7 @@ impl TryFrom<LispVal> for String {
     fn try_from(value: LispVal) -> Result<Self, Self::Error> {
         match value {
             LispVal::String(s) => Ok(s),
+            LispVal::Symbol(s) => Ok(s),
             _ => Err(LispValUnwrapError {
                 expected: LispType::String,
                 got: value.to_type(),
