@@ -11,4 +11,3 @@ rustyline = "10.0.0"
 termion = "2.0.1"
 flow_lang = { path = "../flow_lang" }
 regex = "1.7.0"
-snailquote = "0.3.1"
