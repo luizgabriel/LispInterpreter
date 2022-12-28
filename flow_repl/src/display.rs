@@ -68,6 +68,7 @@ impl std::fmt::Display for ColoredLispVal {
             LispVal::Void() => write!(f, ""),
             LispVal::Symbol(atom) => write!(f, "{}", atom.bright_blue()),
             LispVal::Number(n) => write!(f, "{}", n.to_string().bright_green()),
+            LispVal::Boolean(b) => write!(f, "{}", b.to_string().bright_yellow()),
             LispVal::String(s) => write!(f, "{}{}{}", "\"".bright_green().italic(), s.bright_green(), "\"".bright_green().italic()),
             LispVal::Unevaluated(expr) => write!(f, "{}{}", "'".bright_blue().italic(), ColoredLispVal::new(*expr.clone())),
             LispVal::List(values) => {

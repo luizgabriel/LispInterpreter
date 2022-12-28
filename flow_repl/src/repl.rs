@@ -8,23 +8,26 @@ use flow_lang::{evaluation::*, parsing::*};
 
 use crate::display::{ColoredError, ColoredLispVal};
 
+#[derive(Debug)]
 pub enum REPLError {
     ReadlineError(String),
     ParseError(String),
     EvaluationError(String),
 }
 
+impl std::error::Error for REPLError {}
+
 impl fmt::Display for REPLError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             REPLError::ReadlineError(s) => write!(f, "{}", s),
-            REPLError::ParseError(s) => write!(f, "Parse Error: {}", s),
-            REPLError::EvaluationError(s) => write!(f, "Evaluation Error: {}", s),
+            REPLError::ParseError(s) => write!(f, "{} {}", "Parse Error:".red(), s),
+            REPLError::EvaluationError(s) => write!(f, "{} {}", "Evaluation Error: ".red(), s),
         }
     }
 }
 
-fn to_repl_readline_error(e: ReadlineError) -> REPLError {
+fn to_readline_error(e: ReadlineError) -> REPLError {
     match e {
         ReadlineError::Interrupted => REPLError::ReadlineError("CTRL-C".to_string()),
         ReadlineError::Eof => REPLError::ReadlineError("CTRL-D".to_string()),
@@ -33,20 +36,31 @@ fn to_repl_readline_error(e: ReadlineError) -> REPLError {
 }
 
 pub fn read(rl: &mut Editor::<()>) -> Result<String, REPLError> {
+    let prompt = format!("{} ", ">".bright_blue().bold());
+
     // Read a line of input from the user
-    let input = rl.readline(&format!("{} ", ">".bright_blue().bold()))
-        .map_err(to_repl_readline_error)?;
+    let input = rl.readline(&prompt)
+        .map_err(to_readline_error)?;
 
     // Save the input to history
     rl.add_history_entry(input.as_str());
     Ok(input)
 }
 
+fn unwrap_expression(parse_result: (&str, LispVal)) -> Result<LispVal, REPLError> {
+    let (rest, expr) = parse_result;
+    if rest.is_empty() {
+        Ok(expr)
+    } else {
+        Err(REPLError::ParseError(format!("Unexpected input: {rest}")))
+    }
+}
+
 pub fn evaluate(input: String) -> Result<ColoredLispVal, REPLError> {
     // Parse the input
     let expr = parse(&input)
-        .map(|(_, expr)| expr)
-        .map_err(|e| REPLError::ParseError(e.to_string()))?;
+        .map_err(|e| REPLError::ParseError(e.to_string()))
+        .and_then(unwrap_expression)?;
 
     // Evaluate the expression
     eval(&expr)

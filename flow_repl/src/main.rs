@@ -17,12 +17,12 @@ fn main() {
     loop {
         match read(&mut rl).and_then(evaluate) {
             Ok(result) => println!("{}", result),
-            Err(REPLError::ReadlineError(s)) => {
-                println!("{}", s);
-                break;
+            Err(err) => {
+                if let REPLError::ReadlineError(_) = err {
+                    break;
+                }
+                println!("{}", err);
             }
-            Err(REPLError::ParseError(e)) => println!("{}", e),
-            Err(REPLError::EvaluationError(e)) => println!("{}", e),
         }
     }
 
