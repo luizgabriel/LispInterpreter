@@ -4,9 +4,9 @@ use crate::parsing::string::parse_string;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, char, digit1, multispace0},
+    character::complete::{alpha1, alphanumeric1, char, digit1, multispace0, one_of},
     combinator::{map, map_res, opt, recognize},
-    multi::{many0, many0_count},
+    multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
@@ -21,6 +21,29 @@ pub enum LispVal {
     Void(),
 }
 
+#[derive(PartialEq)]
+pub enum LispType {
+    Any,
+    Symbol,
+    String,
+    List,
+    Number,
+    Void,
+}
+
+impl std::fmt::Display for LispType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LispType::Any => write!(f, "any"),
+            LispType::Symbol => write!(f, "symbol"),
+            LispType::String => write!(f, "string"),
+            LispType::List => write!(f, "list"),
+            LispType::Number => write!(f, "number"),
+            LispType::Void => write!(f, "void"),
+        }
+    }
+}
+
 impl std::fmt::Display for LispVal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -28,15 +51,15 @@ impl std::fmt::Display for LispVal {
             LispVal::Symbol(atom) => write!(f, "{}", atom),
             LispVal::Number(n) => write!(f, "{}", n.to_string()),
             LispVal::String(s) => write!(f, "{}", s.to_string()),
-            LispVal::Unevaluated(expr) => expr.fmt(f),
+            LispVal::Unevaluated(expr) => write!(f, "'{}", expr.to_string()),
             LispVal::List(values) => write!(
                 f,
                 "({})",
-                values.iter().fold(String::new(), |acc, cur| format!(
-                    "{} {}",
-                    acc,
-                    cur.to_string()
-                ))
+                values
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<String>>()
+                    .join(" ")
             ),
         }
     }
@@ -67,23 +90,26 @@ impl LispVal {
         }
     }
 
-    pub fn to_type_name(&self) -> &'static str {
+    pub fn to_type(&self) -> LispType {
         match self {
-            Self::Void() => "void",
-            Self::Symbol(_) => "atom",
-            Self::Number(_) => "number",
-            Self::String(_) => "string",
-            Self::List(_) => "list",
-            Self::Unevaluated(v) => v.to_type_name(),
+            Self::Void() => LispType::Void,
+            Self::Symbol(_) => LispType::Symbol,
+            Self::Number(_) => LispType::Number,
+            Self::String(_) => LispType::String,
+            Self::List(_) => LispType::List,
+            Self::Unevaluated(v) => v.to_type(),
         }
     }
 }
 
-fn parse_atom(input: &str) -> IResult<&str, &str> {
-    recognize(pair(
+fn parse_symbol(input: &str) -> IResult<&str, &str> {
+    let parse_operators = recognize(many1(one_of("><+-*/%=")));
+    let parse_identifier = recognize(pair(
         alt((alpha1, tag("_"))),
-        many0_count(alt((alphanumeric1, tag("_")))),
-    ))(input)
+        terminated(many0_count(alt((alphanumeric1, tag("_")))), opt(tag("?"))),
+    ));
+
+    alt((parse_operators, parse_identifier))(input)
 }
 
 fn parse_number(input: &str) -> IResult<&str, i64> {
@@ -111,7 +137,7 @@ fn parse_expression<'a>(input: &str) -> IResult<&str, LispVal> {
         alt((
             parse_unevaluated,
             map(parse_number, LispVal::Number),
-            map(parse_atom, |v| LispVal::Symbol(v.into())),
+            map(parse_symbol, |v| LispVal::Symbol(v.into())),
             map(parse_string, |v| LispVal::String(v.into())),
             map(parse_list, LispVal::List),
         )),

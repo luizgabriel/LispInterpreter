@@ -1,4 +1,6 @@
-use crate::parsing::LispVal;
+use std::collections::HashMap;
+use crate::parsing::{LispVal, LispType};
+use lazy_static::lazy_static;
 
 #[derive(Debug)]
 pub struct EvalError {
@@ -25,11 +27,12 @@ impl EvalError {
 
 type EvalResult<T = LispVal> = Result<T, EvalError>;
 
-fn eval_check_argument_types<'a>(types_list: &'a [&str]) -> impl Fn(&[LispVal]) -> EvalResult + 'a {
+
+fn eval_check_argument_types<'a>(types_list: &'a [LispType]) -> impl Fn(&[LispVal]) -> EvalResult + 'a {
     move |values| {
         if values.len() < types_list.len() {
             return Err(EvalError::new(format!(
-                "Invalid arguments count, expected {}, got {}",
+                "Invalid arguments count, expected `{}`, got `{}`",
                 types_list.len(),
                 values.len()
             )));
@@ -37,22 +40,22 @@ fn eval_check_argument_types<'a>(types_list: &'a [&str]) -> impl Fn(&[LispVal]) 
 
         if values.len() > types_list.len() {
             return Err(EvalError::new(format!(
-                "Too much arguments, expected {}, got {}",
+                "Too much arguments, expected `{}`, got `{}`",
                 types_list.len(),
                 values.len()
             )));
         }
 
-        for (i, expected_type_name) in types_list.iter().enumerate() {
-            let value_type_name = values.get(i).unwrap().to_type_name();
+        for (i, expected_type) in types_list.iter().enumerate() {
+            let value_type = values.get(i).unwrap().to_type();
 
-            if *expected_type_name == "any" {
+            if *expected_type == LispType::Any {
                 continue;
             }
 
-            if *expected_type_name != value_type_name {
+            if *expected_type != value_type {
                 return Err(
-                    EvalError::new(format!("Invalid argument type at position {i}, expected {expected_type_name}, got {value_type_name}"))
+                    EvalError::new(format!("Invalid argument type at position `{}`, expected `{}`, got `{}`", i, expected_type, value_type))
                 );
             }
         }
@@ -62,38 +65,32 @@ fn eval_check_argument_types<'a>(types_list: &'a [&str]) -> impl Fn(&[LispVal]) 
 }
 
 fn eval_print(values: &[LispVal]) -> EvalResult {
-    eval_check_argument_types(&["any"])(values)?;
+    eval_check_argument_types(&[LispType::Any])(values)?;
     print!("{}", values.first().unwrap());
 
     Ok(LispVal::Void())
 }
 
-fn eval_math(operation: &str, values: &[LispVal]) -> EvalResult {
-    eval_check_argument_types(&["number", "number"])(values)?;
+fn eval_math<F : Fn(i64, i64) -> i64>(operation: F) -> impl Fn(&[LispVal]) -> EvalResult {
+    move |values| {
+        eval_check_argument_types(&[LispType::Number, LispType::Number])(values)?;
 
-    let op = match operation {
-        "add" => |a, b| a + b,
-        "sub" => |a, b| a - b,
-        "mul" => |a, b| a * b,
-        "div" => |a, b| a / b,
-        _ => unreachable!(),
-    };
-
-    let fist = values[0].as_number().unwrap();
-    let second = values[1].as_number().unwrap();
-
-    Ok(LispVal::Number(op(fist, second)))
+        let fist = values[0].as_number().unwrap();
+        let second = values[1].as_number().unwrap();
+    
+        Ok(LispVal::Number(operation(fist, second)))
+    }
 }
 
 fn eval_to_string(values: &[LispVal]) -> EvalResult {
-    eval_check_argument_types(&["number"])(values)?;
+    eval_check_argument_types(&[LispType::Number])(values)?;
 
     let n = &values[0].as_number().unwrap();
     Ok(LispVal::String(n.to_string()))
 }
 
 fn eval_fold(values: &[LispVal]) -> EvalResult {
-    eval_check_argument_types(&["atom", "any", "list"])(values)?;
+    eval_check_argument_types(&[LispType::Symbol, LispType::Any, LispType::List])(values)?;
 
     let operation = &values[0];
     let initial = &values[1];
@@ -105,7 +102,7 @@ fn eval_fold(values: &[LispVal]) -> EvalResult {
 }
 
 fn eval_concat_list(values: &[LispVal]) -> EvalResult {
-    eval_check_argument_types(&["list", "list"])(values)?;
+    eval_check_argument_types(&[LispType::List, LispType::List])(values)?;
 
     let list_a = &values[0].as_list().unwrap();
     let list_b = &values[1].as_list().unwrap();
@@ -116,7 +113,7 @@ fn eval_concat_list(values: &[LispVal]) -> EvalResult {
 }
 
 fn eval_concat_string(values: &[LispVal]) -> EvalResult {
-    eval_check_argument_types(&["string", "string"])(values)?;
+    eval_check_argument_types(&[LispType::String, LispType::String])(values)?;
 
     let first = &values[0].as_string().unwrap();
     let second = &values[1].as_string().unwrap();
@@ -125,7 +122,7 @@ fn eval_concat_string(values: &[LispVal]) -> EvalResult {
 }
 
 fn eval_concat(values: &[LispVal]) -> EvalResult {
-    eval_check_argument_types(&["any", "any"])(values)?;
+    eval_check_argument_types(&[LispType::Any, LispType::Any])(values)?;
 
     let first = &values[0];
     let second = &values[1];
@@ -134,11 +131,33 @@ fn eval_concat(values: &[LispVal]) -> EvalResult {
         (LispVal::List(_), LispVal::List(_)) => eval_concat_list(values),
         (LispVal::String(_), LispVal::String(_)) => eval_concat_string(values),
         _ => Err(EvalError::new(format!(
-            "Invalid argument types, cannot concat {} and {}",
-            first.to_type_name(),
-            second.to_type_name()
+            "Invalid argument types, cannot concat `{}` and `{}`",
+            first.to_type(),
+            second.to_type()
         ))),
     }
+}
+
+fn eval_unevaluated(values: &[LispVal]) -> EvalResult {
+    eval_check_argument_types(&[LispType::Any])(values)?;
+    eval(&values[0])
+}
+
+lazy_static! {
+    static ref SYMBOLS_TABLE: HashMap::<&'static str, Box<dyn Fn(&[LispVal]) -> EvalResult + Sync>>  = {
+        let mut s = HashMap::<&'static str, Box<dyn Fn(&[LispVal]) -> EvalResult + Sync>>::new();
+        s.insert("eval", Box::new(eval_unevaluated));
+        s.insert("print", Box::new(eval_print));
+        s.insert("concat", Box::new(eval_concat));
+        s.insert("to_string", Box::new(eval_to_string));
+        s.insert("fold", Box::new(eval_fold));
+        s.insert("+", Box::new(eval_math(|a, b| a + b)));
+        s.insert("-", Box::new(eval_math(|a, b| a - b)));
+        s.insert("*", Box::new(eval_math(|a, b| a * b)));
+        s.insert("/", Box::new(eval_math(|a, b| a / b)));
+        s.insert("%", Box::new(eval_math(|a, b| a % b)));
+        s
+    };
 }
 
 fn eval_list(values: &[LispVal]) -> EvalResult {
@@ -146,32 +165,26 @@ fn eval_list(values: &[LispVal]) -> EvalResult {
         return Ok(LispVal::List(vec![]));
     }
 
-    let head = eval(&values[0])?;
-    let tail = values[1..].iter().try_fold(Vec::new(), |mut acc, cur| {
-        acc.push(eval(cur)?);
-        Ok(acc)
-    })?;
+    let (head, tail) = values.split_first().unwrap();
 
     if let LispVal::Symbol(atom) = head {
-        return match atom.as_str() {
-            "eval" => eval(&tail[0]),
-            "print" => eval_print(&tail),
-            "add" | "sub" | "mul" | "div" => eval_math(&atom, &tail),
-            "concat" => eval_concat(&tail),
-            "to_string" => eval_to_string(&tail),
-            "fold" => eval_fold(&tail),
-            _ => Err(EvalError::new(format!("Unknown identifier \"{atom}\""))),
+        return match SYMBOLS_TABLE.get(atom.as_str()) {
+            Some(f) => f(&tail.iter().map(eval).try_collect::<Vec<LispVal>>()?),
+            None => Err(EvalError::new(format!("Unknown identifier `{}`", atom))),
         };
     };
 
+    let correct_expr = LispVal::Unevaluated(Box::new(LispVal::List(values.iter().cloned().collect())));
     Err(EvalError::new(format!(
-        "Invalid function call, expected identifier, got {head}",
+        "Invalid function call, expected identifier, got `{}`. \nIs this supposed to be a list? If so, use `{}`",
+        head,
+        correct_expr
     )))
 }
 
 pub fn eval(expr: &LispVal) -> EvalResult {
     match expr {
-        LispVal::List(elements) => eval_list(&elements),
+        LispVal::List(elements) => eval_list(elements),
         LispVal::Unevaluated(value) => Ok(*value.clone()),
         _ => Ok(expr.clone()),
     }
