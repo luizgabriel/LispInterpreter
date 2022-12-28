@@ -153,6 +153,13 @@ lazy_static! {
         s.insert("not", Box::new(eval_op1(|a: bool| !a)));
         s
     };
+
+    static ref GLOBALS: HashMap::<&'static str, LispVal> = {
+        let mut s = HashMap::<&'static str, LispVal>::new();
+        s.insert("MIN_INT", LispVal::Number(i64::MIN));
+        s.insert("MAX_INT", LispVal::Number(i64::MAX));
+        s
+    };
 }
 
 fn eval_list(values: &[LispVal]) -> EvalResult {
@@ -176,6 +183,10 @@ fn eval_list(values: &[LispVal]) -> EvalResult {
 
 pub fn eval(expr: &LispVal) -> EvalResult {
     match expr {
+        LispVal::Symbol(atom) => match GLOBALS.get(atom.as_str()) {
+            Some(value) => Ok(value.clone()),
+            None => Err(EvalError::UnknownIdentifier(atom.clone())),
+        },
         LispVal::List(elements) => eval_list(elements),
         LispVal::Unevaluated(value) => Ok(*value.clone()),
         _ => Ok(expr.clone()),
