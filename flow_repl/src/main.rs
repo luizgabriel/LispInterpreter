@@ -1,8 +1,9 @@
+use rustyline::Editor;
+
+use repl::{evaluate, read, REPLError};
+
 mod display;
 mod repl;
-
-use rustyline::Editor;
-use repl::{read, evaluate, REPLError};
 
 const HISTORY_PATH: &str = ".flow_history";
 
@@ -14,7 +15,7 @@ fn main() {
     rl.load_history(HISTORY_PATH).unwrap_or_default();
 
     loop {
-        match read(&mut rl).and_then(evaluate){
+        match read(&mut rl).and_then(evaluate) {
             Ok(result) => println!("{}", result),
             Err(REPLError::ReadlineError(s)) => {
                 println!("{}", s);

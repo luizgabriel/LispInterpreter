@@ -1,9 +1,12 @@
 use std::fmt;
-use rustyline::Editor;
-use flow_lang::{evaluation::*, parsing::*};
-use rustyline::error::ReadlineError;
-use crate::display::{ColoredLispVal, ColoredError};
+
 use colored::Colorize;
+use rustyline::Editor;
+use rustyline::error::ReadlineError;
+
+use flow_lang::{evaluation::*, parsing::*};
+
+use crate::display::{ColoredError, ColoredLispVal};
 
 pub enum REPLError {
     ReadlineError(String),

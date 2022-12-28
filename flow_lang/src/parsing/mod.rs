@@ -1,15 +1,16 @@
-mod string;
-
-use crate::parsing::string::parse_string;
 use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1, char, digit1, multispace0, one_of},
     combinator::{map, map_res, opt, recognize},
+    IResult,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated},
-    IResult,
 };
+
+use crate::parsing::string::parse_string;
+
+mod string;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LispVal {

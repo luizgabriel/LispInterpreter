@@ -1,6 +1,8 @@
 use std::collections::HashMap;
-use crate::parsing::{LispVal, LispType};
+
 use lazy_static::lazy_static;
+
+use crate::parsing::{LispType, LispVal};
 
 #[derive(Debug)]
 pub struct EvalError {
@@ -71,13 +73,13 @@ fn eval_print(values: &[LispVal]) -> EvalResult {
     Ok(LispVal::Void())
 }
 
-fn eval_math<F : Fn(i64, i64) -> i64>(operation: F) -> impl Fn(&[LispVal]) -> EvalResult {
+fn eval_math<F: Fn(i64, i64) -> i64>(operation: F) -> impl Fn(&[LispVal]) -> EvalResult {
     move |values| {
         eval_check_argument_types(&[LispType::Number, LispType::Number])(values)?;
 
         let fist = values[0].as_number().unwrap();
         let second = values[1].as_number().unwrap();
-    
+
         Ok(LispVal::Number(operation(fist, second)))
     }
 }
