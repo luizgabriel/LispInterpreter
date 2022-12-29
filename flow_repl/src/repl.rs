@@ -61,7 +61,7 @@ pub fn evaluate(scope: Scope, input: &str) -> Result<(Scope, ColoredLispVal), RE
         .and_then(unwrap_expression)?;
 
     eval(scope, &expr)
-        .map(|(scope, val)| (scope, ColoredLispVal::new(val)))
+        .map(|(new_scope, val)| (new_scope, ColoredLispVal::new(val)))
         .map_err(ColoredError::new)
         .map_err(|e| REPLError::EvaluationError(e.to_string()))
 }

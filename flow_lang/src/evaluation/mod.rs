@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use crate::parsing::{error::LispValUnwrapError, LispVal};
 use error::EvalError;
 
-use self::scope::Scope;
+use self::scope::{Scope, INITIAL_SCOPE};
 
 pub mod scope;
 pub mod error;
@@ -21,7 +21,7 @@ where
     A1: std::convert::TryFrom<LispVal, Error = LispValUnwrapError>,
     R: std::convert::Into<LispVal>,
 {
-    move |scope: Scope, values: &[LispVal]| {
+    move |scope: Scope, values: &[LispVal]| -> EvalResult {
         if values.len() != 1 {
             return Err(EvalError::InvalidArgumentsCount {
                 expected: 1,
@@ -126,6 +126,30 @@ fn eval_let(scope: Scope, values: &[LispVal]) -> EvalResult {
     Ok((scope.bind(name, value.clone()), value))
 }
 
+fn eval_print_scope(scope: Scope, values: &[LispVal]) -> EvalResult {
+    if values.len() != 0 {
+        return Err(EvalError::InvalidArgumentsCount {
+            expected: 0,
+            got: values.len(),
+        });
+    }
+
+    println!("{:#?}", scope);
+
+    Ok((scope, LispVal::Void()))
+}
+
+fn eval_clear_scope(_: Scope, values: &[LispVal]) -> EvalResult {
+    if values.len() != 0 {
+        return Err(EvalError::InvalidArgumentsCount {
+            expected: 0,
+            got: values.len(),
+        });
+    }
+
+    Ok((INITIAL_SCOPE.clone(), LispVal::Void()))
+}
+
 fn eval_math<F>(operation: F) -> impl EvalFn
 where
     F: Fn(i64, i64) -> i64,
@@ -156,6 +180,8 @@ lazy_static! {
         s.insert("fold", Box::new(eval_fold));
         s.insert("concat", Box::new(eval_concat));
         s.insert("let", Box::new(eval_let));
+        s.insert("scope", Box::new(eval_print_scope));
+        s.insert("clear", Box::new(eval_clear_scope));
 
         s.insert("+", Box::new(eval_math(|a, b| a + b)));
         s.insert("-", Box::new(eval_math(|a, b| a - b)));
@@ -203,14 +229,18 @@ fn eval_list(scope: Scope, values: &[LispVal]) -> EvalResult {
             .map(|v| eval(scope.clone(), v))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let (scopes, args): (Vec<_>, Vec<_>) = evaluated_list
+        let (new_scopes, args): (Vec<_>, Vec<_>) = evaluated_list
             .into_iter()
             .unzip();
 
-        let scope = scopes.into_iter().fold(Scope::new(), |acc, s| acc.merge(s));
+        let new_scope = if new_scopes.is_empty() {
+            scope
+        } else {
+            new_scopes.into_iter().fold(Scope::new(), |acc, s| acc.merge(s))
+        };
 
         return match SYMBOLS_TABLE.get(atom.as_str()) {
-            Some(f) => f(scope, &args),
+            Some(f) => f(new_scope, &args),
             None => Err(EvalError::UnknownIdentifier(atom.clone())),
         };
     };

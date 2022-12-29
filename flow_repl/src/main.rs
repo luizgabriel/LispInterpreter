@@ -1,7 +1,7 @@
 use rustyline::Editor;
 
 use repl::{evaluate, read, REPLError};
-use flow_lang::evaluation::scope::GLOBAL_SCOPE;
+use flow_lang::evaluation::scope::INITIAL_SCOPE;
 
 mod display;
 mod repl;
@@ -11,7 +11,7 @@ const HISTORY_PATH: &str = ".flow_history";
 fn main() {
     // Set up the rustyline editor to handle input and output
     let mut rl = Editor::<()>::new().unwrap();
-    let mut scope = GLOBAL_SCOPE.clone();
+    let mut scope = INITIAL_SCOPE.clone();
 
     // Load any previously saved history
     rl.load_history(HISTORY_PATH).unwrap_or_default();
