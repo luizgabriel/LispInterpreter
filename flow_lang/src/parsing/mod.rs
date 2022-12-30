@@ -115,6 +115,22 @@ impl LispVal {
             (l, r) => vec![l.clone(), r.clone()].into(),
         }
     }
+
+    pub fn try_push(&self, other: &Self) -> Result<Self, LispValUnwrapError> {
+        let mut list: Vec<LispVal> = self.clone().try_into()?;
+        list.push(other.clone());
+        Ok(list.into())
+    }
+
+    pub fn try_append(&self, other: &Vec<Self>) -> Result<Self, LispValUnwrapError> {
+        let mut list: Vec<LispVal> = self.clone().try_into()?;
+        list.extend(other.iter().cloned());
+        Ok(list.into())
+    }
+
+    pub fn is_void(&self) -> bool {
+        matches!(self, Self::Void())
+    }
 }
 
 impl FromIterator<LispVal> for LispVal {

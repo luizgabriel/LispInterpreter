@@ -20,7 +20,9 @@ fn main() {
     loop {
         match read(&mut rl).and_then(|input| evaluate(scope.clone(), input.as_str())) {
             Ok((new_scope, result )) => {
-                println!("{}", result);
+                if !result.value.is_void()  {
+                    println!("{}", result);
+                }
                 scope = new_scope;
             }
             Err(err) => {

@@ -1,6 +1,4 @@
-use crate::parsing::{LispType, LispVal, error::LispValUnwrapError};
-
-use super::scope::Scope;
+use crate::parsing::{error::LispValUnwrapError, LispType, LispVal};
 
 #[derive(Debug)]
 pub enum EvalError {
@@ -26,13 +24,17 @@ pub enum EvalError {
     ListOverflow {
         access: usize,
         count: usize,
-    }
+    },
 }
 
 impl std::fmt::Display for EvalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EvalError::InvalidArgumentsCount { expected, got, name } => {
+            EvalError::InvalidArgumentsCount {
+                expected,
+                got,
+                name,
+            } => {
                 if got < expected {
                     return write!(
                         f,
@@ -84,12 +86,23 @@ impl std::fmt::Display for EvalError {
 impl std::error::Error for EvalError {}
 
 impl EvalError {
-    pub fn from(e: LispValUnwrapError, position: usize, scope: &Scope) -> Self {
-        EvalError::InvalidArgumentType {
-            name: scope.context.clone(),
+    pub fn from_arg<'a>(position: usize, name: &'a str) -> impl Fn(LispValUnwrapError) -> Self + 'a {
+        move |e| EvalError::InvalidArgumentType {
+            name: name.to_string(),
             expected: e.expected,
             got: e.got,
             position,
+        }
+    }
+
+    pub fn from_invoke<'a>(args: &'a [LispVal], name: &'a str) -> impl Fn(LispValUnwrapError) -> Self + 'a {
+        move |_| {
+            let mut expr = vec![LispVal::Symbol(name.to_string())];
+            expr.extend(args.iter().cloned());
+
+            EvalError::InvalidFunctionCall {
+                values: expr,
+            }
         }
     }
 }

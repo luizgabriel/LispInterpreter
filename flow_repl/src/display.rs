@@ -35,7 +35,7 @@ fn colorize_quoted_expressions(s: &str) -> String {
 }
 
 pub struct ColoredLispVal {
-    value: LispVal,
+    pub value: LispVal,
 }
 
 impl ColoredLispVal {

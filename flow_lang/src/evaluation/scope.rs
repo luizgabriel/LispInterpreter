@@ -30,17 +30,6 @@ impl Scope {
         }
     }
 
-    pub fn merge(&self, other: Scope) -> Scope {
-        if other.context != self.context {
-            panic!("Cannot merge scopes with different contexts");
-        }
-
-        Scope {
-            context: self.context.clone(),
-            bindings: self.bindings.clone().union(other.bindings),
-        }
-    }
-
     pub fn get(&self, name: &str) -> Option<&LispVal> {
         self.bindings.get(name)
     }
