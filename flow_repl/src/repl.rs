@@ -37,12 +37,8 @@ fn to_readline_error(e: ReadlineError) -> REPLError {
 
 pub fn read(rl: &mut Editor<()>) -> Result<String, REPLError> {
     let prompt = format!("{} ", ">".bright_blue().bold());
-
-    // Read a line of input from the user
     let input = rl.readline(&prompt).map_err(to_readline_error)?;
 
-    // Save the input to history
-    rl.add_history_entry(input.as_str());
     Ok(input)
 }
 

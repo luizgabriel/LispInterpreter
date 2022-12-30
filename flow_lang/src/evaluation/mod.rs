@@ -7,14 +7,23 @@ use error::EvalError;
 
 use self::scope::{Scope, INITIAL_SCOPE};
 
-pub mod scope;
 pub mod error;
+pub mod scope;
 
 type EvalResult = Result<(Scope, LispVal), EvalError>;
 
 trait EvalFn: Fn(Scope, &[LispVal]) -> EvalResult {}
 
 impl<F> EvalFn for F where F: Fn(Scope, &[LispVal]) -> EvalResult {}
+
+impl LispVal {
+    fn into_value<T>(self, position: usize, scope: &Scope) -> Result<T, EvalError>
+    where
+        T: TryFrom<LispVal, Error = LispValUnwrapError>,
+    {
+        self.try_into().map_err(|e| EvalError::from(e, position, scope))
+    }
+}
 
 fn eval_op1<F: Fn(A1) -> R, A1, R>(operation: F) -> impl EvalFn
 where
@@ -24,15 +33,14 @@ where
     move |scope: Scope, values: &[LispVal]| -> EvalResult {
         if values.len() != 1 {
             return Err(EvalError::InvalidArgumentsCount {
+                name: scope.context,
                 expected: 1,
                 got: values.len(),
             });
         }
 
-        let a1 = values[0]
-            .clone()
-            .try_into()
-            .map_err(|e| EvalError::from(e, 0))?; // values[0].as_number().unwrap(
+        let (scope, arg1) = eval(scope, &values[0])?;
+        let a1 = arg1.into_value(0, &scope)?;
 
         Ok((scope, operation(a1).into()))
     }
@@ -47,63 +55,99 @@ where
     move |scope: Scope, values: &[LispVal]| {
         if values.len() != 2 {
             return Err(EvalError::InvalidArgumentsCount {
+                name: scope.context,
                 expected: 2,
                 got: values.len(),
             });
         }
 
-        let a1 = values[0]
-            .clone()
-            .try_into()
-            .map_err(|e| EvalError::from(e, 0))?;
-        let a2 = values[1]
-            .clone()
-            .try_into()
-            .map_err(|e| EvalError::from(e, 1))?;
+        let (scope, arg1) = eval(scope, &values[0])?;
+        let (scope, arg2) = eval(scope, &values[1])?;
+        let a1 = arg1.into_value(0, &scope)?;
+        let a2 = arg2.into_value(1, &scope)?;
 
         Ok((scope, operation(a1, a2).into()))
     }
 }
 
 fn eval_fold(scope: Scope, values: &[LispVal]) -> EvalResult {
-    let operation = &values[0];
-    let initial = values[1].clone();
-    let list: Vec<LispVal> = values[2].clone().try_into().unwrap();
+    let (scope, operation) = eval(scope, &values[0])?;
+    let (scope, initial) = eval(scope, &values[1])?;
+    let (scope, list) = eval(scope, &values[2])?;
+    let list: Vec<LispVal> = list.into_value(2, &scope)?;
 
     list.iter()
         .try_fold((scope, initial), |(scope, acc), value| {
-            eval(
-                scope,
-                &LispVal::List(vec![operation.clone(), acc, value.clone()]),
-            )
+            let expr = vec![operation.clone(), acc.clone(), value.clone()].into();
+            eval(scope, &expr) // (eval '(op acc value))
         })
 }
 
-fn concat_list(left: Vec<LispVal>, right: Vec<LispVal>) -> Vec<LispVal> {
-    left.iter().chain(right.iter()).cloned().collect()
+fn eval_map(scope: Scope, values: &[LispVal]) -> EvalResult {
+    let operation = &values[0];
+    let (scope, arg2) = eval(scope, &values[1])?;
+
+    let list: Vec<LispVal> = arg2.try_into().unwrap();
+    let initial = (scope, vec![]);
+
+    let (scope, list) = list
+        .into_iter()
+        .try_fold(initial, |(scope, mut acc), value| {
+            let (scope, expr) =
+                eval_concat(scope, [operation.clone(), value.to_unevaluated()].as_ref())?;
+            let (scope, result) = eval(scope, &expr)?;
+            acc.push(result);
+
+            Ok((scope, acc))
+        })?;
+
+    return Ok((scope, list.into()));
 }
 
-fn concat_string(left: String, right: String) -> String {
-    format!("{}{}", left, right)
+fn eval_if(scope: Scope, values: &[LispVal]) -> EvalResult {
+    if values.len() != 3 {
+        return Err(EvalError::InvalidArgumentsCount {
+            name: "if".to_string(),
+            expected: 3,
+            got: values.len(),
+        });
+    }
+    let (scope, condition) = eval(scope, &values[0])?;
+    let condition = condition.into_value(0, &scope)?;
+
+    if condition {
+        eval(scope, &values[1])
+    } else {
+        eval(scope, &values[2])
+    }
 }
 
 fn eval_concat(scope: Scope, values: &[LispVal]) -> EvalResult {
-    let left = &values[0];
-    let right = &values[1];
+    let (scope, mut left) = eval(scope, &values[0])?;
+    let (scope, mut right) = eval(scope, &values[1])?;
 
-    match (left, right) {
-        (LispVal::List(_), LispVal::List(_)) => eval_op2(concat_list)(scope, values),
-        (LispVal::String(_), LispVal::String(_)) => eval_op2(concat_string)(scope, values),
-        _ => Err(EvalError::InvalidConcatenation {
-            left: left.to_type(),
-            right: right.to_type(),
-        }),
+    match (&mut left, &mut right) {
+        (LispVal::List(left), LispVal::List(right)) => {
+            left.append(right);
+            Ok((scope, left.clone().into()))
+        }
+        (LispVal::List(left), v) => {
+            left.push(v.clone());
+            Ok((scope, left.clone().into()))
+        }
+        (v, LispVal::List(right)) => {
+            let mut list = vec![v.clone()];
+            list.append(right);
+            Ok((scope, list.into()))
+        }
+        (l, r) => Ok((scope, vec![l.clone(), r.clone()].into())),
     }
 }
 
 fn eval_unevaluated(scope: Scope, values: &[LispVal]) -> EvalResult {
     if values.len() != 1 {
         return Err(EvalError::InvalidArgumentsCount {
+            name: "eval".to_string(),
             expected: 1,
             got: values.len(),
         });
@@ -115,20 +159,24 @@ fn eval_unevaluated(scope: Scope, values: &[LispVal]) -> EvalResult {
 fn eval_let(scope: Scope, values: &[LispVal]) -> EvalResult {
     if values.len() != 2 {
         return Err(EvalError::InvalidArgumentsCount {
+            name: "let".to_string(),
             expected: 2,
             got: values.len(),
         });
     }
 
-    let name: String = values[0].clone().try_into().map_err(|e| EvalError::from(e, 0))?;
-    let value = values[1].clone();
+    let name = values[0]
+        .as_symbol()
+        .map_err(|e| EvalError::from(e, 0, &scope))?;
+    let (scope, value) = eval(scope, &values[1])?;
 
-    Ok((scope.bind(name, value.clone()), value))
+    Ok((scope.bind(name.to_string(), value.clone()), value))
 }
 
 fn eval_print_scope(scope: Scope, values: &[LispVal]) -> EvalResult {
     if values.len() != 0 {
         return Err(EvalError::InvalidArgumentsCount {
+            name: scope.context,
             expected: 0,
             got: values.len(),
         });
@@ -139,9 +187,10 @@ fn eval_print_scope(scope: Scope, values: &[LispVal]) -> EvalResult {
     Ok((scope, LispVal::Void()))
 }
 
-fn eval_clear_scope(_: Scope, values: &[LispVal]) -> EvalResult {
+fn eval_clear_scope(scope: Scope, values: &[LispVal]) -> EvalResult {
     if values.len() != 0 {
         return Err(EvalError::InvalidArgumentsCount {
+            name: scope.context,
             expected: 0,
             got: values.len(),
         });
@@ -175,13 +224,35 @@ lazy_static! {
     static ref SYMBOLS_TABLE: HashMap::<&'static str, Box<dyn EvalFn + Sync>> = {
         let mut s = HashMap::<&'static str, Box<dyn EvalFn + Sync>>::new();
         s.insert("eval", Box::new(eval_unevaluated));
-        s.insert("print", Box::new(eval_op1(|s: String| print!("{}", s))));
-        s.insert("to_string", Box::new(eval_op1(|n: i64| n.to_string())));
+        s.insert(
+            "print",
+            Box::new(eval_op1(|s: String| print!("{}", s))),
+        );
+        s.insert(
+            "to_string",
+            Box::new(eval_op1(|n: i64| n.to_string())),
+        );
         s.insert("fold", Box::new(eval_fold));
+        s.insert("map", Box::new(eval_map));
         s.insert("concat", Box::new(eval_concat));
         s.insert("let", Box::new(eval_let));
-        s.insert("scope", Box::new(eval_print_scope));
-        s.insert("clear", Box::new(eval_clear_scope));
+        s.insert("_scope", Box::new(eval_print_scope));
+        s.insert("_clear", Box::new(eval_clear_scope));
+        s.insert(
+            "head",
+            Box::new(eval_op1(|l: Vec<LispVal>| {
+                l.get(0).unwrap().clone()
+            })),
+        );
+        s.insert(
+            "tail",
+            Box::new(eval_op1(|l: Vec<LispVal>| l[1..].to_vec())),
+        );
+        s.insert(
+            "len",
+            Box::new(eval_op1(|l: Vec<LispVal>| l.len() as i64)),
+        );
+        s.insert("if", Box::new(eval_if));
 
         s.insert("+", Box::new(eval_math(|a, b| a + b)));
         s.insert("-", Box::new(eval_math(|a, b| a - b)));
@@ -221,26 +292,26 @@ fn eval_list(scope: Scope, values: &[LispVal]) -> EvalResult {
         return Ok((scope, vec![].into()));
     }
 
-    let (head, tail) = values.split_first().unwrap();
+    let (heads, tail) = values.clone().split_at(1);
+    let head = heads.get(0).unwrap();
 
     if let LispVal::Symbol(atom) = head {
-        let evaluated_list = tail
-            .iter()
-            .map(|v| eval(scope.clone(), v))
-            .collect::<Result<Vec<_>, _>>()?;
+        if atom == "list" {
+            let (scope, tail) = tail.into_iter()
+                .try_fold((scope, Vec::<LispVal>::new()), |(scope, acc), value| {
+                    let (scope, value) = eval(scope, &value)?;
+                    Ok((scope, {
+                        let mut acc = acc;
+                        acc.push(value);
+                        acc
+                    }))
+                })?;
 
-        let (new_scopes, args): (Vec<_>, Vec<_>) = evaluated_list
-            .into_iter()
-            .unzip();
-
-        let new_scope = if new_scopes.is_empty() {
-            scope
-        } else {
-            new_scopes.into_iter().fold(Scope::new(), |acc, s| acc.merge(s))
-        };
+            return Ok((scope, tail.into()));
+        }
 
         return match SYMBOLS_TABLE.get(atom.as_str()) {
-            Some(f) => f(new_scope, &args),
+            Some(f) => f(scope.with_context(atom.clone()), &tail),
             None => Err(EvalError::UnknownIdentifier(atom.clone())),
         };
     };
@@ -259,5 +330,37 @@ pub fn eval(scope: Scope, expr: &LispVal) -> EvalResult {
         LispVal::List(elements) => eval_list(scope, elements),
         LispVal::Unevaluated(value) => Ok((scope, *value.clone())),
         _ => Ok((scope, expr.clone())),
+    }
+}
+
+#[macro_export]
+macro_rules! eval_it {
+    ($expr:expr) => {
+        crate::evaluation::eval($crate::evaluation::scope::Scope::new("unknown".to_string()), &parse_it!($expr))
+            .unwrap()
+            .1
+    };
+    ($expr:expr, $scope:expr) => {
+        crate::evaluation::eval($scope, &parse_it!($expr))
+            .unwrap()
+            .1
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{parse_it, parsing::LispVal};
+
+    #[test]
+    fn test_math_expression() {
+        assert_eq!(eval_it!("(+ 1 2 3 4 5)"), LispVal::Number(15));
+    }
+
+    #[test]
+    fn test_binding() {
+        assert_eq!(eval_it!("(list (let x 10) (+ x 2))"), LispVal::List(vec![
+            LispVal::Number(10),
+            LispVal::Number(12)
+        ]));
     }
 }

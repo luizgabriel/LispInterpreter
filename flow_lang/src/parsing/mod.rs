@@ -8,7 +8,6 @@ use nom::{
     sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
-
 use crate::parsing::string::parse_string;
 
 use self::error::LispValUnwrapError;
@@ -67,7 +66,7 @@ impl std::fmt::Display for LispVal {
                 values
                     .iter()
                     .map(ToString::to_string)
-                    .collect::<Vec<String>>()
+                    .collect::<Vec<_>>()
                     .join(" ")
             ),
         }
@@ -75,6 +74,13 @@ impl std::fmt::Display for LispVal {
 }
 
 impl LispVal {
+    pub fn as_symbol(&self) -> Result<&str, LispValUnwrapError> {
+        match self {
+            Self::Symbol(s) => Ok(s),
+            _ => Err(LispValUnwrapError { got: self.to_type(), expected: LispType::Symbol }),
+        }
+    }
+
     pub fn to_type(&self) -> LispType {
         match self {
             Self::Void() => LispType::Void,
@@ -85,6 +91,10 @@ impl LispVal {
             Self::Boolean(_) => LispType::Boolean,
             Self::Unevaluated(v) => v.to_type(),
         }
+    }
+
+    pub fn to_unevaluated(&self) -> Self {
+        Self::Unevaluated(Box::new(self.clone()))
     }
 }
 
@@ -158,7 +168,6 @@ impl TryFrom<LispVal> for String {
     fn try_from(value: LispVal) -> Result<Self, Self::Error> {
         match value {
             LispVal::String(s) => Ok(s),
-            LispVal::Symbol(s) => Ok(s),
             _ => Err(LispValUnwrapError {
                 expected: LispType::String,
                 got: value.to_type(),
@@ -199,7 +208,7 @@ fn parse_symbol(input: &str) -> IResult<&str, &str> {
     let parse_operators = recognize(many1(one_of("><+-*/%=")));
     let parse_identifier = recognize(pair(
         alt((alpha1, tag("_"))),
-        terminated(many0_count(alt((alphanumeric1, tag("_")))), opt(tag("?"))),
+        terminated(many0_count(alt((alphanumeric1, tag("_")))), opt(one_of("?!"))),
     ));
 
     context("symbol", alt((parse_operators, parse_identifier)))(input)
@@ -250,7 +259,7 @@ fn parse_expression<'a>(input: &str) -> IResult<&str, LispVal> {
                 map(parse_number, LispVal::Number),
                 map(parse_symbol, |v| LispVal::Symbol(v.into())),
                 map(parse_string, |v| LispVal::String(v.into())),
-                map(parse_list, LispVal::List),
+                map(parse_list, |v| LispVal::List(v.into())),
             )),
             opt(multispace0),
         ),
@@ -259,4 +268,60 @@ fn parse_expression<'a>(input: &str) -> IResult<&str, LispVal> {
 
 pub fn parse(input: &str) -> IResult<&str, LispVal> {
     terminated(parse_expression, multispace0)(input)
+}
+
+#[macro_export]
+macro_rules! parse_it {
+    ($input:expr) => {
+        crate::parsing::parse($input).map(|(_, v)| v).unwrap()
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parsing::LispVal;
+
+    #[test]
+    fn test_math_expression() {
+        assert_eq!(parse_it!("(+ 1 2)"), LispVal::List(vec![
+            LispVal::Symbol("+".into()),
+            LispVal::Number(1),
+            LispVal::Number(2),
+        ]));
+    }
+
+    #[test]
+    fn test_nested_math_expression() {
+        assert_eq!(parse_it!("(+ 1 (* 2 3))"), LispVal::List(vec![
+            LispVal::Symbol("+".into()),
+            LispVal::Number(1),
+            LispVal::List(vec![
+                LispVal::Symbol("*".into()),
+                LispVal::Number(2),
+                LispVal::Number(3),
+            ]),
+        ]));
+    }
+
+    #[test]
+    fn test_unevaluated_expression() {
+        assert_eq!(parse_it!("'(+ 1 2)"), LispVal::Unevaluated(Box::new(LispVal::List(vec![
+            LispVal::Symbol("+".into()),
+            LispVal::Number(1),
+            LispVal::Number(2),
+        ]))));
+    }
+
+    #[test]
+    fn test_boolean() {
+        assert_eq!(parse_it!("true"), LispVal::Boolean(true));
+        assert_eq!(parse_it!("false"), LispVal::Boolean(false));
+    }
+
+    #[test]
+    fn test_number() {
+        assert_eq!(parse_it!("1"), LispVal::Number(1));
+        assert_eq!(parse_it!("+1"), LispVal::Number(1));
+        assert_eq!(parse_it!("-1"), LispVal::Number(-1));
+    }
 }

@@ -1,5 +1,3 @@
-use rustyline::Editor;
-
 use repl::{evaluate, read, REPLError};
 use flow_lang::evaluation::scope::INITIAL_SCOPE;
 
@@ -9,11 +7,14 @@ mod repl;
 const HISTORY_PATH: &str = ".flow_history";
 
 fn main() {
-    // Set up the rustyline editor to handle input and output
-    let mut rl = Editor::<()>::new().unwrap();
+    let config = rustyline::Config::builder()
+        .auto_add_history(true)
+        .color_mode(rustyline::ColorMode::Enabled)
+        .build();
+
+    let mut rl = rustyline::Editor::<()>::with_config(config).unwrap();
     let mut scope = INITIAL_SCOPE.clone();
 
-    // Load any previously saved history
     rl.load_history(HISTORY_PATH).unwrap_or_default();
 
     loop {
@@ -23,14 +24,13 @@ fn main() {
                 scope = new_scope;
             }
             Err(err) => {
+                println!("{}", err);
                 if let REPLError::ReadlineError(_) = err {
                     break;
                 }
-                println!("{}", err);
             }
         }
     }
 
-    // Save the history to a file
     rl.save_history(HISTORY_PATH).unwrap();
 }
