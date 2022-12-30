@@ -96,6 +96,25 @@ impl LispVal {
     pub fn to_unevaluated(&self) -> Self {
         Self::Unevaluated(Box::new(self.clone()))
     }
+
+    pub fn concat(&self, other: &Self) -> Self {
+        match (self, other) {
+            (LispVal::List(left), LispVal::List(right)) => {
+                left.iter().chain(right.iter()).cloned().collect()
+            }
+            (LispVal::List(left), v) => {
+                let mut result = left.clone();
+                result.push(v.clone());
+                result.into()
+            }
+            (v, LispVal::List(right)) => {
+                let mut result = vec![v.clone()];
+                result.extend(right.iter().cloned());
+                result.into()
+            }
+            (l, r) => vec![l.clone(), r.clone()].into(),
+        }
+    }
 }
 
 impl FromIterator<LispVal> for LispVal {
