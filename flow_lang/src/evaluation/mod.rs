@@ -78,7 +78,7 @@ fn eval_fold(scope: Scope, values: &[LispVal]) -> EvalResult {
 
     list.iter()
         .try_fold((scope, initial), |(scope, acc), value| {
-            let expr = vec![operation.clone(), acc.clone(), value.clone()].into();
+            let expr = operation.concat(&acc).concat(value);
             eval(scope, &expr) // (eval '(op acc value))
         })
 }
