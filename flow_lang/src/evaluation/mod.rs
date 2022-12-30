@@ -325,9 +325,7 @@ fn eval_list(scope: Scope, values: &[LispVal]) -> EvalResult {
         let (scope, tail) = eval_tail(scope, tail)?;
 
         if atom == "list" {
-            let mut new_list = vec![head.clone()];
-            new_list.extend(tail);
-            return Ok((scope, new_list.into()));
+            return Ok((scope, tail.into()));
         }
 
         if let Some(f) = SYMBOLS_TABLE.get(atom.as_str()) {
@@ -391,14 +389,28 @@ mod tests {
 
     #[test]
     fn test_math_expression() {
-        assert_eq!(eval_it!("(+ 1 2 3 4 5)"), LispVal::Number(15));
+        assert_eq!(eval_it!("(+ 1 2)"), LispVal::Number(3));
     }
 
     #[test]
     fn test_binding() {
-        assert_eq!(eval_it!("(list (let x 10) (+ x 2))"), LispVal::List(vec![
+        assert_eq!(eval_it!("(list (let 'x 10) (+ x 2))"), vec![
             LispVal::Void(),
             LispVal::Number(12)
-        ]));
+        ].into());
+    }
+
+    #[test]
+    fn test_fold() {
+        assert_eq!(eval_it!("(fold '(+) 1 '(1 2 3))"), LispVal::Number(7));
+    }
+
+    #[test]
+    fn test_map() {
+        assert_eq!(eval_it!("(map '(+ 2) '(1 2 3))"), vec![
+            LispVal::Number(3),
+            LispVal::Number(4),
+            LispVal::Number(5)
+        ].into());
     }
 }
