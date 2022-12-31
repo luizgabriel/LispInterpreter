@@ -141,26 +141,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flow_lang"
-version = "0.1.0"
-dependencies = [
- "im",
- "lazy_static",
- "nom",
-]
-
-[[package]]
-name = "flow_repl"
-version = "0.1.0"
-dependencies = [
- "colored",
- "flow_lang",
- "regex",
- "rustyline",
- "termion",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -221,6 +201,26 @@ name = "linux-raw-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
+
+[[package]]
+name = "lisp_lang"
+version = "0.1.0"
+dependencies = [
+ "im",
+ "lazy_static",
+ "nom",
+]
+
+[[package]]
+name = "lisp_repl"
+version = "0.1.0"
+dependencies = [
+ "colored",
+ "lisp_lang",
+ "regex",
+ "rustyline",
+ "termion",
+]
 
 [[package]]
 name = "log"
