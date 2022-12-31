@@ -1,4 +1,4 @@
-# FlowLang
+# Simple Lisp Interpreter
 A Lisp-Like interpreter made in Rust using Parser Combinators
 
 ------
