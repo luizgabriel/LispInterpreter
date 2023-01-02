@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'flow_lang'",
+            "name": "Debug unit tests in library 'lisp_lang'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=flow_lang"
+                    "--package=lisp_lang"
                 ],
                 "filter": {
-                    "name": "flow_lang",
+                    "name": "lisp_lang",
                     "kind": "lib"
                 }
             },
@@ -26,16 +26,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'flow_repl'",
+            "name": "Debug executable 'lisp_repl'",
             "cargo": {
                 "args": [
                     "+nightly",
                     "build",
-                    "--bin=flow_repl",
-                    "--package=flow_repl"
+                    "--bin=lisp_repl",
+                    "--package=lisp_repl"
                 ],
                 "filter": {
-                    "name": "flow_repl",
+                    "name": "lisp_repl",
                     "kind": "bin"
                 }
             },
@@ -45,16 +45,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'flow_repl'",
+            "name": "Debug unit tests in executable 'lisp_repl'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=flow_repl",
-                    "--package=flow_repl"
+                    "--bin=lisp_repl",
+                    "--package=lisp_repl"
                 ],
                 "filter": {
-                    "name": "flow_repl",
+                    "name": "lisp_repl",
                     "kind": "bin"
                 }
             },

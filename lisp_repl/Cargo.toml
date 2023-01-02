@@ -1,0 +1,11 @@
+[package]
+name = "lisp_repl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+colored = "2.0.0"
+rustyline = "10.0.0"
+termion = "2.0.1"
+lisp_lang = { path = "../lisp_lang" }
+regex = "1.7.0"
