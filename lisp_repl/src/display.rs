@@ -1,9 +1,8 @@
 use colored::Colorize;
-use regex::Regex;
 use lisp_lang::parsing::*;
+use regex::Regex;
 
-fn transform_single_quoted_text<F: Fn(&str) -> String>(transform: F) -> impl Fn(&str) -> String
-{
+fn transform_single_quoted_text<F: Fn(&str) -> String>(transform: F) -> impl Fn(&str) -> String {
     move |s| {
         let re = Regex::new(r#"`(?:[^`\\]|\\.)*`"#).unwrap();
         let mut result = String::new();
@@ -26,7 +25,8 @@ fn transform_single_quoted_text<F: Fn(&str) -> String>(transform: F) -> impl Fn(
 
 fn colorize_quoted_expressions(s: &str) -> String {
     let transform = |s: &str| -> String {
-        parse(s).ok()
+        parse(s)
+            .ok()
             .map(|(_, v)| ColoredLispVal::new(v).to_string())
             .unwrap_or(s.to_string())
     };
@@ -57,7 +57,11 @@ impl<T: std::error::Error> ColoredError<T> {
 
 impl<T: std::error::Error> std::fmt::Display for ColoredError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", colorize_quoted_expressions(&self.error.to_string()))
+        write!(
+            f,
+            "{}",
+            colorize_quoted_expressions(&self.error.to_string())
+        )
     }
 }
 
@@ -65,27 +69,53 @@ impl std::fmt::Display for ColoredLispVal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value {
             LispVal::Void() => write!(f, "{}", "void".bright_blue()),
-            LispVal::Symbol(atom) => write!(f, "{}", if self.value.is_macro() {
-                atom.bright_red()
-            } else {
-                atom.bright_blue()
-            }),
+            LispVal::Symbol(atom) => write!(
+                f,
+                "{}",
+                if self.value.is_macro() {
+                    atom.bright_red()
+                } else {
+                    atom.bright_blue()
+                }
+            ),
             LispVal::Number(n) => write!(f, "{}", n.to_string().bright_green()),
             LispVal::Boolean(b) => write!(f, "{}", b.to_string().bright_yellow()),
-            LispVal::String(s) => write!(f, "{}{}{}", "\"".bright_green().italic(), s.bright_green(), "\"".bright_green().italic()),
-            LispVal::Unevaluated(expr) => write!(f, "{}{}", "'".bright_blue().italic(), ColoredLispVal::new(*expr.clone())),
-            LispVal::Function { parameters: args, body, applied } => {
-                write!(f, "({} {})",
-                       "fn!".bright_red(),
-                       ColoredLispVal::new(*body.clone()))?;
-
-                if !applied.is_empty() {
-                    write!(f, ", {}", ColoredLispVal::new(applied.clone().into()))?;
-                }
-                Ok(())
-            }
+            LispVal::String(s) => write!(
+                f,
+                "{}{}{}",
+                "\"".bright_green().italic(),
+                s.bright_green(),
+                "\"".bright_green().italic()
+            ),
+            LispVal::Unevaluated(expr) => write!(
+                f,
+                "{}{}",
+                "'".bright_blue().italic(),
+                ColoredLispVal::new(*expr.clone())
+            ),
+            LispVal::Function {
+                parameters,
+                body,
+                applied,
+            } => write!(
+                f,
+                "({} {} [{}])",
+                "fn!".bright_red(),
+                ColoredLispVal::new(*body.clone()),
+                parameters
+                    .iter()
+                    .zip(applied.iter())
+                    .map(|(p, a)| format!(
+                        "{} = {}",
+                        p.bright_blue(),
+                        ColoredLispVal::new(a.clone())
+                    ))
+                    .collect::<Vec<String>>()
+                    .join(", "),
+            ),
             LispVal::List(values) => {
-                let inner_values = values.iter()
+                let inner_values = values
+                    .iter()
                     .map(|v| ColoredLispVal::new(v.clone()).to_string())
                     .collect::<Vec<String>>()
                     .join(" ");
