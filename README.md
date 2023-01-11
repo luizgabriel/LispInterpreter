@@ -1,5 +1,5 @@
 # Simple Lisp Interpreter
-A Lisp-Like interpreter made in Rust using Parser Combinators
+A Lisp-Like interpreter written in Rust using Parser Combinators
 
 ------
 ## Running the REPL
