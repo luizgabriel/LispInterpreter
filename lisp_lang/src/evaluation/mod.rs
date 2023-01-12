@@ -131,7 +131,7 @@ fn eval_value_definition(scope: Scope, values: &[LispVal]) -> EvalResult {
         .unwrap()
         .as_symbol()
         .map_err(EvalError::from_arg(0, &name))?;
-    let value = values.get(1).unwrap().clone();
+    let (scope, value) = eval(scope, values.get(1).unwrap())?;
 
     Ok((scope.bind(name.to_string(), value), LispVal::Void()))
 }
@@ -512,20 +512,20 @@ mod tests {
     #[test]
     fn test_binding() {
         assert_eq!(
-            eval_it!("(list (let 'x 10) (+ x 2))"),
+            eval_it!("(list (def! x 10) (+ x 2))"),
             vec![LispVal::Void(), LispVal::Number(12)].into()
         );
     }
 
     #[test]
     fn test_fold() {
-        assert_eq!(eval_it!("(fold '(+) 1 '(1 2 3))"), LispVal::Number(7));
+        assert_eq!(eval_it!("(fold '+ 1 '(1 2 3))"), LispVal::Number(7));
     }
 
     #[test]
     fn test_map() {
         assert_eq!(
-            eval_it!("(map '(+ 2) '(1 2 3))"),
+            eval_it!("(map (+ 2) '(1 2 3))"),
             vec![LispVal::Number(3), LispVal::Number(4), LispVal::Number(5)].into()
         );
     }
@@ -533,10 +533,22 @@ mod tests {
     #[test]
     fn test_function_call() {
         assert_eq!(
-            eval_it!("(list (let 'add2 '(+ 2)) (map add2 (list 1 2 3)))"),
+            eval_it!("(list (def! add2 (+ 2)) (map add2 (list 1 2 3)))"),
             vec![
                 LispVal::Void(),
                 vec![LispVal::Number(3), LispVal::Number(4), LispVal::Number(5)].into()
+            ]
+            .into()
+        );
+    }
+
+    #[test]
+    fn test_branching() {
+        assert_eq!(
+            eval_it!("(list (def! x 5) (if! (> x 3) (list 1 2 3) (list 4 5 6)))"),
+            vec![
+                LispVal::Void(),
+                vec![LispVal::Number(1), LispVal::Number(2), LispVal::Number(3)].into()
             ]
             .into()
         );

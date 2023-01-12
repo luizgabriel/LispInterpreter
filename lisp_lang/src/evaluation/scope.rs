@@ -45,12 +45,22 @@ impl Scope {
 
 pub const MAIN_CONTEXT: &str = "main";
 
+#[macro_export]
+macro_rules! lisp_scope {
+    // Base case
+    () => {
+        Scope::empty(MAIN_CONTEXT.to_string())
+    };
+    // Recursive case
+    ($name:ident = $value:expr, $($rest:tt)*) => {
+        lisp_scope!($($rest)*).bind(stringify!($name).to_string(), $value)
+    };
+}
+
 lazy_static! {
-    pub static ref INITIAL_SCOPE: Scope = {
-        let scope = Scope::empty(MAIN_CONTEXT.to_string())
-            .bind("MIN_INT".to_string(), LispVal::Number(i64::MIN))
-            .bind("MAX_INT".to_string(), LispVal::Number(i64::MAX));
-        scope
+    pub static ref INITIAL_SCOPE: Scope = lisp_scope!{
+        MIN_INT = LispVal::Number(i64::MIN),
+        MAX_INT = LispVal::Number(i64::MAX),
     };
 }
 
